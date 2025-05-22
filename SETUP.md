@@ -9,6 +9,14 @@ This guide explains how to set up and run the Property Recommendation System usi
 - NVIDIA GPU with CUDA support (optional, for better performance)
 - NVIDIA CUDA drivers installed on your system
 
+## Data Requirements
+
+The system requires a JSON dataset file at `data/appraisals_dataset.json`. The setup script will:
+
+- Check if this file exists
+- Offer to create a sample dataset file if it doesn't exist (for testing purposes)
+- Allow you to continue without it (but the application will likely fail)
+
 ## Setup and Run Instructions
 
 ### For Windows Users
@@ -28,10 +36,12 @@ The script will:
   - CUDA 12.1 (for newest GPUs)
   - CPU-only fallback
 - Install PyTorch with your selected CUDA version
-- Install triton and properly configure unsloth to work with CUDA
+- Attempt to install triton (optional package, will continue if it fails)
+- Install unsloth and configure it to work without triton if necessary
 - Install tf-keras (required for compatibility with Transformers and Keras 3)
-- Fix import order issues automatically
+- Patch source files to handle import issues
 - Set up necessary CUDA environment variables
+- Check for required data files and offer to create a sample dataset
 - Run the main application
 - Close the virtual environment when done
 
@@ -47,21 +57,7 @@ The script will:
    ./run.sh
    ```
 
-The script will:
-
-- Check if Python and pip are installed
-- Create a virtual environment (if it doesn't exist)
-- Prompt you to select a CUDA version for PyTorch:
-  - CUDA 11.8 (recommended for most GPUs)
-  - CUDA 12.1 (for newest GPUs)
-  - CPU-only fallback
-- Install PyTorch with your selected CUDA version
-- Install triton and properly configure unsloth to work with CUDA
-- Install tf-keras (required for compatibility with Transformers and Keras 3)
-- Fix import order issues automatically
-- Set up necessary CUDA environment variables
-- Run the main application
-- Close the virtual environment when done
+The script will perform the same steps as the Windows batch script.
 
 ## CUDA Version Selection
 
@@ -111,13 +107,15 @@ If the scripts don't work for your system, you can set up the project manually:
    python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda)"
    ```
 
-5. Install triton (required for unsloth):
+5. Try to install triton (optional):
 
    ```
-   pip install triton
+   pip install triton --no-deps
    ```
 
-6. Install unsloth with proper dependencies:
+   Note: This package may not be available for all systems. The system will work without it.
+
+6. Install unsloth and its dependencies:
 
    ```
    pip install unsloth --no-deps
@@ -136,25 +134,36 @@ If the scripts don't work for your system, you can set up the project manually:
    pip install tf-keras
    ```
 
-9. Fix import order issues by creating a modified main file:
+9. Create or verify the data file:
 
-   ```python
-   # Create a new file named main_fixed.py
-   # Add at the beginning:
-   import unsloth
-
-   # Then copy the contents of main.py
-   ```
+   - Make sure you have a `data` directory in the project root
+   - Create a file named `data/appraisals_dataset.json` with your dataset
+   - For testing, you can create a minimal dataset:
+     ```json
+     [
+       {
+         "property_id": "sample1",
+         "location": { "latitude": 40.7128, "longitude": -74.006 },
+         "features": {
+           "bedrooms": 3,
+           "bathrooms": 2,
+           "area": 1500,
+           "year_built": 2010
+         },
+         "price": 350000
+       }
+     ]
+     ```
 
 10. Set CUDA environment variables:
 
     - Windows: `set PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128`
     - Linux/Mac: `export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128`
 
-11. Run the modified application:
+11. Run the application:
 
     ```
-    python src/main_fixed.py
+    python src/main.py
     ```
 
 12. Deactivate the virtual environment when done:
@@ -174,12 +183,12 @@ If you encounter any issues:
    pip install tf-keras
    ```
 5. If you encounter a "No module named 'triton'" error:
-   ```
-   pip install triton
-   ```
-6. If you see a warning about import order with unsloth:
-   - Make sure to import unsloth before other modules
-   - Use our modified main_fixed.py which fixes this issue
+   - This is normal as triton is an optional package not available on all systems
+   - The scripts have been updated to handle this case automatically
+   - You can continue using the system without triton
+6. If you encounter a "FileNotFoundError" for the appraisals_dataset.json file:
+   - Create the data directory: `mkdir -p data`
+   - Create a sample dataset file as shown in step 9 of the manual setup
 7. If you encounter CUDA/GPU errors:
    - Make sure your NVIDIA drivers are up to date (check in NVIDIA Control Panel)
    - Verify your GPU is compatible with the CUDA version you selected

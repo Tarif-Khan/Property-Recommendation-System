@@ -107,17 +107,17 @@ UNSLOTH_INIT_FILE="venv/lib/python*/site-packages/unsloth/__init__.py"
 UNSLOTH_INIT_PATH=$(ls $UNSLOTH_INIT_FILE 2>/dev/null || echo "")
 
 if [ -n "$UNSLOTH_INIT_PATH" ]; then
-    $PYTHON_CMD -c "
-path = '$UNSLOTH_INIT_PATH'
-try:
-    with open(path, 'r') as f:
-        content = f.read()
-    with open(path, 'w') as f:
-        f.write(content.replace('import triton', 'try:\\n    import triton\\nexcept ImportError:\\n    print(\"Triton not available, some optimizations disabled\")'))
-    print('Modified unsloth __init__.py to handle missing triton')
-except:
-    print('Could not modify unsloth __init__.py')
-"
+    cat > patch.py << EOF
+import re
+with open('$UNSLOTH_INIT_PATH', 'r') as f:
+    content = f.read()
+patched = content.replace('import triton', 'try:\\n    import triton\\nexcept ImportError:\\n    print("Triton not available, some optimizations disabled")')
+with open('$UNSLOTH_INIT_PATH', 'w') as f:
+    f.write(patched)
+print('Patched unsloth init file')
+EOF
+    $PYTHON_CMD patch.py
+    rm patch.py
 fi
 
 # Install required dependencies
@@ -147,21 +147,12 @@ echo -e "${GREEN}All requirements installed successfully!${NC}"
 echo -e "${YELLOW}Setting up CUDA environment variables...${NC}"
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
 
-# Create a temporary fix for the import order issue
-echo -e "${YELLOW}Fixing import order issue in main.py...${NC}"
+# Check if the main file exists
 MAIN_FILE="src/main.py"
-TEMP_FILE="src/main_fixed.py"
-
-cp "$MAIN_FILE" "$TEMP_FILE"
-
-# Run Python to modify the main_fixed.py file to fix import order
-$PYTHON_CMD -c "
-with open('$TEMP_FILE', 'r') as f:
-    content = f.read()
-content = 'try:\\n    import unsloth\\nexcept ImportError:\\n    print(\"Unsloth import failed, some functionality may be limited\")\\n' + content
-with open('$TEMP_FILE', 'w') as f:
-    f.write(content)
-"
+if [ ! -f "$MAIN_FILE" ]; then
+    echo -e "${RED}Main script not found at $MAIN_FILE. Please check your project structure.${NC}"
+    exit 1
+fi
 
 # Update the llama_recommender.py file if it exists to handle missing triton
 LLAMA_FILE="src/llama_recommender.py"
@@ -169,18 +160,58 @@ if [ -f "$LLAMA_FILE" ]; then
     LLAMA_BACKUP="src/llama_recommender.py.bak"
     cp "$LLAMA_FILE" "$LLAMA_BACKUP"
     
-    $PYTHON_CMD -c "
+    # Create a patched version of the file
+    cat > patch_llama.py << EOF
 with open('$LLAMA_FILE', 'r') as f:
     content = f.read()
-content = content.replace('from unsloth import FastLanguageModel', 'try:\\n    from unsloth import FastLanguageModel\\nexcept ImportError:\\n    print(\"FastLanguageModel import failed, functionality will be limited\")')
+patched = content.replace('from unsloth import FastLanguageModel', 'try:\\n    from unsloth import FastLanguageModel\\nexcept ImportError:\\n    print("FastLanguageModel import failed, functionality will be limited")')
 with open('$LLAMA_FILE', 'w') as f:
-    f.write(content)
-"
+    f.write(patched)
+print('Patched llama_recommender.py file')
+EOF
+    $PYTHON_CMD patch_llama.py
+    rm patch_llama.py
 fi
 
-# Run the fixed main.py file
-echo -e "${YELLOW}Running main_fixed.py...${NC}"
-$PYTHON_CMD src/main_fixed.py
+# Check if the data directory and file exist
+echo -e "${YELLOW}Checking for data files...${NC}"
+DATA_DIR="data"
+APPRAISAL_FILE="data/appraisals_dataset.json"
+
+if [ ! -d "$DATA_DIR" ]; then
+    echo -e "${YELLOW}Data directory not found. Creating an empty data directory.${NC}"
+    mkdir -p "$DATA_DIR"
+fi
+
+if [ ! -f "$APPRAISAL_FILE" ]; then
+    echo -e "${YELLOW}Warning: Appraisal dataset file not found at $APPRAISAL_FILE${NC}"
+    echo -e "This file is required for the application to run properly."
+    echo -e "Would you like to:"
+    echo -e "1. Create a sample dataset file (for testing only)"
+    echo -e "2. Continue anyway (will likely fail)"
+    read -p "Enter choice (1 or 2): " DATA_CHOICE
+    
+    if [ "$DATA_CHOICE" = "1" ]; then
+        echo -e "${YELLOW}Creating a sample dataset file...${NC}"
+        cat > "$APPRAISAL_FILE" << EOF
+[
+  {
+    "property_id": "sample1",
+    "location": {"latitude": 40.7128, "longitude": -74.0060},
+    "features": {"bedrooms": 3, "bathrooms": 2, "area": 1500, "year_built": 2010},
+    "price": 350000
+  }
+]
+EOF
+        echo -e "${GREEN}Sample dataset created. Note: This is only for testing.${NC}"
+    else
+        echo -e "${YELLOW}Continuing without the dataset file. Expect the application to fail.${NC}"
+    fi
+fi
+
+# Run the main.py file directly
+echo -e "${YELLOW}Running main.py directly...${NC}"
+$PYTHON_CMD src/main.py
 
 # Deactivate virtual environment
 deactivate

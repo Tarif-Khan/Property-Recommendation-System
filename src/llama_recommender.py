@@ -1,20 +1,17 @@
-import numpy as np
-import pandas as pd
-import json
-import os
-import torch
-from typing import List, Dict, Any, Optional, Tuple
-from pathlib import Path
 import logging
+import os
 import re
-from tqdm import tqdm
-import time
-
-# Hugging Face & Unsloth imports
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from unsloth import FastLanguageModel
-from peft import LoraConfig
+from typing import Dict, List, Optional, Any
+from pathlib import Path
+import torch
 from datasets import Dataset
+
+try:
+    # Attempt to import required modules for LLAMA model fine-tuning
+    from fastllm import FastLanguageModel
+    from transformers import AutoTokenizer
+except ImportError:
+    print("FastLanguageModel import failed, functionality will be limited")
 
 # Configure logging
 logging.basicConfig(
@@ -29,7 +26,7 @@ class LlamaPropertyRecommender:
     """
     
     def __init__(self, 
-                 model_name: str = "unsloth/llama-3-8b-bnb-4bit",
+                 model_name: str = "meta-llama/Llama-2-7b-hf",
                  cache_dir: Optional[str] = None,
                  max_length: int = 1024,
                  device: str = "auto"):
@@ -69,14 +66,12 @@ class LlamaPropertyRecommender:
         logger.info(f"Initializing LLAMA model: {self.model_name}")
         
         # Load the tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             cache_dir=self.cache_dir
         )
         
         # Configure QLoRA for efficient fine-tuning
         # Using Unsloth's optimized loading
-        model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=self.model_name,
             max_seq_length=self.max_length,
             dtype=torch.bfloat16,
@@ -201,7 +196,6 @@ class LlamaPropertyRecommender:
     
     def _extract_location_data(self, properties: List[Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
         """
-        Extract location data from properties for filtering.
         
         Args:
             properties: List of property dictionaries
@@ -303,7 +297,6 @@ class LlamaPropertyRecommender:
                     f"Style: {comp.get('stories', '')}\n"
                     f"Sale Date: {comp.get('sale_date', '')}\n"
                     f"Sale Price: {comp.get('sale_price', '')}\n"
-                    f"Distance from Subject: {comp.get('distance_to_subject', '')}\n\n"
                     f"This property is a good comparable because it is of similar type and style, "
                     f"located within {comp.get('distance_to_subject', '')} of the subject property."
                 )
@@ -329,7 +322,6 @@ class LlamaPropertyRecommender:
         logger.info(f"Preparing dataset with {len(training_examples)} examples")
         
         # Convert to Dataset format
-        dataset = Dataset.from_list(training_examples)
         
         # Format dataset for instruction fine-tuning
         def format_instruction(example):
@@ -365,7 +357,6 @@ class LlamaPropertyRecommender:
             self._initialize_model()
         
         # Create training examples
-        logger.info("Creating training examples from property data")
         training_examples = self._create_training_examples(properties)
         
         if not training_examples:
@@ -390,7 +381,6 @@ class LlamaPropertyRecommender:
         
         # Prepare model for fine-tuning
         logger.info("Preparing model for fine-tuning")
-        ft_model = FastLanguageModel.get_peft_model(
             self.model,
             lora_config,
             train_on_inputs=False
@@ -399,7 +389,6 @@ class LlamaPropertyRecommender:
         # Start fine-tuning
         logger.info(f"Starting fine-tuning for {num_epochs} epochs")
         try:
-            trainer = FastLanguageModel.get_trainer(
                 model=ft_model,
                 tokenizer=self.tokenizer,
                 train_dataset=dataset,
@@ -555,7 +544,6 @@ class LlamaPropertyRecommender:
             if len(recommendations) >= top_n:
                 break
                 
-        # If we couldn't extract enough recommendations from the model output,
         # fall back to simple similarity-based recommendations
         if len(recommendations) < top_n:
             logger.info("Adding fallback recommendations based on property type similarity")
