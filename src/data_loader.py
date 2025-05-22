@@ -39,7 +39,12 @@ class AppraisalDataLoader:
         with open(self.data_path, 'r') as f:
             data = json.load(f)
             
-        self.appraisals = data.get('appraisals', [])
+        # Handle both list and dictionary formats
+        if isinstance(data, dict):
+            self.appraisals = data.get('appraisals', [])
+        else:
+            self.appraisals = data
+            
         return self.appraisals
     
     def extract_location_from_address(self, address: str) -> Dict[str, str]:
