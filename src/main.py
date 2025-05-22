@@ -27,7 +27,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Property Recommendation System')
     
     # General arguments
-    parser.add_argument('--data_path', type=str, default='../data/appraisals_dataset.json',
+    parser.add_argument('--data_path', type=str, default='src/data/appraisals_dataset.json',
                         help='Path to the appraisal dataset')
     parser.add_argument('--method', type=str, choices=['knn', 'neural', 'llm', 'llama', 'all'],
                         default='all', help='Recommendation method to use')

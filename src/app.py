@@ -55,7 +55,7 @@ with st.sidebar:
     st.header("Configuration")
     
     # Data loading
-    data_path = st.text_input("Data Path", value="data/appraisals_dataset.json")
+    data_path = st.text_input("Data Path", value="src/data/appraisals_dataset.json")
     
     if st.button("Load Data"):
         with st.spinner("Loading data..."):

@@ -104,13 +104,6 @@ echo Installing unsloth with CUDA support...
 %PIP_CMD% uninstall -y unsloth
 %PIP_CMD% install unsloth --no-deps
 
-REM Modify unsloth to work without triton if needed
-echo Setting up unsloth to work without triton if necessary...
-set "unsloth_init_file=venv\Lib\site-packages\unsloth\__init__.py"
-if exist "%unsloth_init_file%" (
-    %PYTHON_CMD% -c "content = open('%unsloth_init_file%', 'r').read(); open('%unsloth_init_file%', 'w').write(content.replace('import triton', 'try:\n    import triton\nexcept ImportError:\n    print(\"Triton not available, some optimizations disabled\")'))" 2>nul
-)
-
 REM Install required dependencies
 echo Installing accelerate bitsandbytes peft transformers trl...
 %PIP_CMD% install accelerate bitsandbytes peft transformers trl
@@ -138,42 +131,10 @@ REM Create environment variables for CUDA
 echo Setting up CUDA environment variables...
 SET PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
 
-REM Create a temporary fix for the import order issue - Fixed syntax error
-echo Fixing import order issue in main.py...
-set "main_file=src\main.py"
-
-REM Check if main.py exists
-if not exist "%main_file%" (
-    echo Main script not found at %main_file%. Please check your project structure.
-    exit /b 1
-)
-
-REM Create the main_fixed.py file with properly escaped quotes
-copy "%main_file%" "%temp_file%" >nul
-echo import unsloth > import_unsloth.py
-type import_unsloth.py "%main_file%" > "%temp_file%"
-del import_unsloth.py
-
-REM Update the llama_recommender.py file if it exists to handle missing triton
-set "llama_file=src\llama_recommender.py"
-if exist "%llama_file%" (
-    set "llama_backup=src\llama_recommender.py.bak"
-    copy "%llama_file%" "%llama_backup%" >nul
-    
-    echo try:> temp_import.py
-    echo     from unsloth import FastLanguageModel>> temp_import.py
-    echo except ImportError:>> temp_import.py
-    echo     print("FastLanguageModel import failed, functionality will be limited")>> temp_import.py
-    
-    findstr /v "from unsloth import FastLanguageModel" "%llama_file%" > "%llama_file%.tmp"
-    type temp_import.py "%llama_file%.tmp" > "%llama_file%"
-    del "%llama_file%.tmp" temp_import.py
-)
-
 REM Check if the data directory and file exist
 echo Checking for data files...
-set "data_dir=data"
-set "appraisal_file=data\appraisals_dataset.json"
+set "data_dir=src/data"
+set "appraisal_file=src/data/appraisals_dataset.json"
 
 if not exist "%data_dir%" (
     echo Data directory not found. Creating an empty data directory.
@@ -181,30 +142,19 @@ if not exist "%data_dir%" (
 )
 
 if not exist "%appraisal_file%" (
-    echo Warning: Appraisal dataset file not found at %appraisal_file%
-    echo This file is required for the application to run properly.
-    echo Would you like to:
-    echo 1. Create a sample dataset file (for testing only)
-    echo 2. Continue anyway (will likely fail)
-    set /p DATA_CHOICE="Enter choice (1 or 2): "
-    
-    if "!DATA_CHOICE!"=="1" (
-        echo Creating a sample dataset file...
-        echo [> "%appraisal_file%"
-        echo   {>> "%appraisal_file%"
-        echo     "property_id": "sample1",>> "%appraisal_file%"
-        echo     "location": {"latitude": 40.7128, "longitude": -74.0060},>> "%appraisal_file%"
-        echo     "features": {"bedrooms": 3, "bathrooms": 2, "area": 1500, "year_built": 2010},>> "%appraisal_file%"
-        echo     "price": 350000>> "%appraisal_file%"
-        echo   }>> "%appraisal_file%"
-        echo ]>> "%appraisal_file%"
-        echo Sample dataset created. Note: This is only for testing.
-    ) else (
-        echo Continuing without the dataset file. Expect the application to fail.
-    )
+    echo Appraisal dataset file not found at %appraisal_file%. Creating a sample dataset file...
+    echo [> "%appraisal_file%"
+    echo   {>> "%appraisal_file%"
+    echo     "property_id": "sample1",>> "%appraisal_file%"
+    echo     "location": {"latitude": 40.7128, "longitude": -74.0060},>> "%appraisal_file%"
+    echo     "features": {"bedrooms": 3, "bathrooms": 2, "area": 1500, "year_built": 2010},>> "%appraisal_file%"
+    echo     "price": 350000>> "%appraisal_file%"
+    echo   }>> "%appraisal_file%"
+    echo ]>> "%appraisal_file%"
+    echo Sample dataset created. Note: This is only for testing.
 )
 
-REM Run the main.py file directly (not main_fixed.py)
+REM Run the main.py file directly
 echo Running main.py directly...
 %PYTHON_CMD% src\main.py
 

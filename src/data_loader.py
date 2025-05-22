@@ -11,7 +11,7 @@ class AppraisalDataLoader:
     Class to load and preprocess appraisal data for property recommendation.
     """
     
-    def __init__(self, data_path: str = "../data/appraisals_dataset.json"):
+    def __init__(self, data_path: str = "src/data/appraisals_dataset.json"):
         """
         Initialize the data loader with the path to the appraisal dataset.
         
