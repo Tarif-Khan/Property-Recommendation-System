@@ -1,6 +1,6 @@
 # Property Recommendation System
 
-This project implements a Python script (`property_similarity.py`) to recommend comparable properties (comps) for a subject property based on an appraisal dataset. It aims to replicate an appraiser's choice of comps by using a k-Nearest Neighbors (k-NN) machine learning algorithm.
+This project implements a Python script (`property_similarity.py`) to recommend comparable properties (comps) for a subject property based on an appraisal dataset. It aims to replicate an appraiser's choice of comps by using a k-Nearest Neighbors (k-NN) machine learning algorithm. To run the app + the front end, please install all dependencies and then "run streamlit run app.py" in your CLI.
 
 ## Table of Contents
 1.  [Purpose](#purpose)

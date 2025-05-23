@@ -194,6 +194,7 @@ def standardize_property_features(prop_data: Dict[str, Any],
     std['year_built'] = parsed_year_built
 
     # Here's my logic to calculate age and year_built
+    # I will note that this code is very messy, but in a future todo it can be cleaned
     std['age'] = None
     if data_type == 'comp':
         age_raw_comp = prop_data.get('age')

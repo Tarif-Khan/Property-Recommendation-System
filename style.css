@@ -1,0 +1,197 @@
+/* General Body Styles */
+body {
+    font-family: 'Arial', sans-serif;
+    /* Streamlit's theme will control the base background and text color.
+       We will override specific elements as needed. */
+}
+
+/* Main content area */
+.main .block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    padding-left: 3rem;
+    padding-right: 3rem;
+}
+
+/* Titles and Headers on the main page (dark background) */
+/* Targeting elements likely used by st.title and st.header directly in the main flow */
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > h1,
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > h2,
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > h3 {
+    color: #e0e0e0; /* Light grey/off-white */
+    font-weight: bold;
+}
+
+/* Specifically for st.title() output */
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > h1 {
+    font-size: 2.5em;
+    margin-bottom: 0.5em;
+    border-bottom: 2px solid #3498db; /* Blue accent */
+    padding-bottom: 0.3em;
+    color: #ffffff; /* Brighter white for the main title */
+}
+
+/* Specifically for st.header() output */
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > h2 {
+    font-size: 1.8em;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    color: #f0f0f0; /* Slightly less bright white */
+}
+
+/* General text from st.write() or st.markdown() directly in the main dark area */
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stMarkdown > p,
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stText > p {
+    color: #cccccc; /* Light grey for general text */
+}
+
+
+/* Buttons */
+.stButton>button {
+    background-color: #3498db; /* Blue */
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    font-size: 1.1em;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.stButton>button:hover {
+    background-color: #2980b9; /* Darker Blue */
+}
+.stButton>button:active {
+    background-color: #1f6a9c; /* Even Darker Blue */
+}
+
+
+/* Expander for script output */
+.stExpander {
+    border: 1px solid #555; /* Darker border for dark theme */
+    border-radius: 5px;
+    margin-top: 1rem;
+}
+.stExpander header {
+    background-color: #3a3a3a; /* Darker grey for expander header */
+    padding: 0.5rem 1rem;
+    font-weight: bold;
+    color: #e0e0e0; /* Light text for expander header */
+}
+.stExpander header:hover {
+    background-color: #4a4a4a;
+}
+
+/* Code blocks (like the script output) */
+pre {
+    background-color: #2c3e50; /* Dark background for code */
+    color: #f8f8f2; /* Light text for code */
+    padding: 1rem;
+    border-radius: 5px;
+    overflow-x: auto; /* Allow horizontal scrolling for long lines */
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.95em;
+    white-space: pre-wrap; /* Wrap long lines */
+    word-wrap: break-word;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background-color: #34495e; /* Darker sidebar */
+    padding: 1rem;
+}
+[data-testid="stSidebar"] .stMarkdown p, 
+[data-testid="stSidebar"] .stMarkdown li,
+[data-testid="stSidebar"] [data-testid="stText"],
+[data-testid="stSidebar"] [data-testid="stHeading"] { /* More specific selectors for sidebar text elements */
+     color: #ecf0f1 !important; /* Lighter text for sidebar, !important to override potential defaults */
+}
+[data-testid="stSidebar"] h1, 
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4 {
+    color: #ffffff !important; /* Ensure sidebar headers are also light */
+}
+[data-testid="stSidebar"] .stAlert { /* For st.info in sidebar */
+    background-color: rgba(236, 240, 241, 0.1); /* Slightly transparent light background */
+    border-color: #7f8c8d;
+}
+[data-testid="stSidebar"] .stAlert p {
+    color: #ecf0f1 !important; /* Ensure text inside sidebar alert is light */
+}
+
+
+/* Custom class for README display */
+.readme-content {
+    background-color: #ffffff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    line-height: 1.6;
+    color: #333333; /* Default dark text color for content inside the white box */
+}
+.readme-content h1, .readme-content h2, .readme-content h3, .readme-content h4, .readme-content h5, .readme-content h6 {
+    color: #2c3e50; /* Darker text for headers inside the white box */
+}
+.readme-content p, .readme-content li, .readme-content span {
+    color: #333333; /* Ensure paragraphs and list items are dark */
+}
+.readme-content a {
+    color: #3498db; /* Blue links */
+}
+.readme-content a:hover {
+    color: #2980b9;
+}
+.readme-content code { /* Inline code in README */
+    background-color: #f0f0f0;
+    color: #c7254e; /* Mimicking GitHub's inline code style */
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+}
+.readme-content pre { /* Code blocks in README */
+    background-color: #f6f8fa; /* Light background for code blocks in README */
+    color: #333; /* Dark text for code blocks in README */
+    border: 1px solid #ddd;
+}
+.readme-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
+
+/* Ensure st.info on the main page (dark background) is also styled for readability */
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stAlert > div[role="alert"] {
+    background-color: rgba(44, 62, 80, 0.7); /* Darker, slightly transparent background for info box */
+    color: #e0e0e0; /* Light text */
+    border-color: #566573;
+}
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stAlert > div[role="alert"] p {
+     color: #e0e0e0 !important; /* Light text */
+}
+
+/* Ensure st.error on the main page (dark background) is also styled for readability */
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stException { /* For st.error showing exceptions */
+    background-color: rgba(192, 57, 43, 0.3); /* Reddish transparent background */
+}
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stException pre { /* Text inside error block */
+    color: #f8f8f2 !important; /* Light text */
+    background-color: transparent !important; /* Make its own pre background transparent */
+}
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stAlert[data-testid="stNotification"] { /* For st.error messages */
+     background-color: rgba(192, 57, 43, 0.3);
+     border-color: #c0392b;
+}
+
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stAlert[data-testid="stNotification"] p {
+     color: #f8f8f2 !important;
+}
+
+
+/* Ensure st.success on the main page (dark background) is also styled for readability */
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stAlert[data-testid="stNotification"].st-success {
+    background-color: rgba(39, 174, 96, 0.3);
+    border-color: #27ae60;
+}
+div[data-testid="stAppViewContainer"] > .main > .block-container > div > div > .stAlert[data-testid="stNotification"].st-success p {
+    color: #f8f8f2 !important;
+} 
