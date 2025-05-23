@@ -22,11 +22,24 @@ CATEGORICAL_FEATURES = ['structure_type', 'style', 'condition']
 def clean_string(text: Optional[str]) -> Optional[str]:
     return text.strip() if text else None
 
-def parse_sq_ft(value: Optional[Any]) -> Optional[float]: # Changed to float to handle potential non-integer SQFT
-    if value is None or str(value).lower() == "n/a":
+def parse_sq_ft(value: Optional[Any]) -> Optional[float]:
+    if value is None:
         return None
-    match = re.search(r"(\\d+\\.?\\d*|\\d+)", str(value).replace(",", "")) # Allows for decimals
-    return float(match.group(1)) if match else None
+    
+    s_value = str(value).lower()
+
+    if s_value == "n/a" or s_value == "none": # Added "none" for safety
+        return None
+    
+    s_value_cleaned = s_value.replace(",", "").replace("sqft", "").replace("sf", "").strip()
+    
+    try:
+        return float(s_value_cleaned)
+    except ValueError:
+        # If direct float conversion fails, it's not a simple number.
+        # We could add more sophisticated regex here if needed for complex cases,
+        # but for now, if it's not a direct float, we'll return None.
+        return None
 
 def parse_price(value: Optional[str]) -> Optional[float]:
     if not value:
@@ -109,9 +122,11 @@ def standardize_property_features(prop_data: Dict[str, Any],
     if not prop_data:
         return None
 
+    # print(f"DEBUG_STD_ENTRY (ID: {prop_data.get('orderID', prop_data.get('id'))}, Type: {data_type}): Input prop_data['year_built'] = '{prop_data.get('year_built')}', reference_year = {reference_year}")
+
     std = {"data_type": data_type, "original_data": prop_data} # Keep original for reference
     
-    std['id'] = prop_data.get('orderID', prop_data.get('id', clean_string(prop_data.get('address'))))
+    std['id'] = str(prop_data.get('orderID', prop_data.get('id', prop_data.get('pin', clean_string(prop_data.get('address'))))))
     std['address_full'] = clean_string(prop_data.get('address'))
     
     if data_type == 'comp':
@@ -129,16 +144,116 @@ def standardize_property_features(prop_data: Dict[str, Any],
     std['gla'] = parse_sq_ft(prop_data.get('gla'))
     
     year_built_raw = prop_data.get('year_built')
-    std['year_built'] = int(re.search(r"(\\d{4})", str(year_built_raw)).group(1)) if year_built_raw and re.search(r"(\\d{4})", str(year_built_raw)) else None
+    parsed_year_built = None
+
+    # print(f"DEBUG_STD_YBParsing (ID: {std.get('id')}, Type: {data_type}): Raw year_built_raw = '{year_built_raw}'") # Moved into specific blocks
+
+    if data_type == 'property_listing':
+        # ... (Property listing logic as it was in the last working version for property_listing)
+        # This means the version that correctly set age=40, year_built=1985 for listing 76989
+        # For property listings, 'year_built' might sometimes actually be the age.
+        if isinstance(year_built_raw, (int, float)) and 0 <= year_built_raw < 150: # Heuristic
+            pass # Will be handled in age calculation section for property_listing
+        elif isinstance(year_built_raw, str):
+            match_year = re.search(r"(\\d{4})", year_built_raw)
+            if match_year:
+                parsed_year_built = int(match_year.group(1))
+        elif isinstance(year_built_raw, (int, float)) and year_built_raw > 1800:
+             parsed_year_built = int(year_built_raw)
+        # print(f"DEBUG_STD_YBParsing (ID: {std.get('id')}, Type: {data_type}): PropertyListing: year_built_raw='{year_built_raw}', parsed_year_built={parsed_year_built}")
+
+    elif data_type == 'subject' or data_type == 'comp':
+        # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}, Type: {data_type}): ENTERING, year_built_raw='{year_built_raw}', type={type(year_built_raw)}")
+        if isinstance(year_built_raw, str):
+            year_built_cleaned = year_built_raw.strip()
+            # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): IS STRING. Cleaned to '{year_built_cleaned}'. Searching r'(\\d{{4}})' in it.")
+            match_year = None
+            try:
+                match_year = re.search(r"(\\d{4})", year_built_cleaned)
+            except Exception:
+                pass # Silently ignore regex errors, fallback will be attempted
+            
+            if match_year:
+                # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): REGEX MATCHED: '{match_year.group(0)}', group(1)='{match_year.group(1)}'")
+                try:
+                    parsed_year_built = int(match_year.group(1))
+                    # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): Parsed to int: {parsed_year_built}")
+                except Exception:
+                    pass # Silently ignore int conversion errors
+            else:
+                # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): REGEX NO MATCH for cleaned string '{year_built_cleaned}'. Attempting fallback digit extraction.")
+                year_digits = "".join(filter(str.isdigit, year_built_cleaned))
+                if len(year_digits) >= 4:
+                    potential_year_str = year_digits[:4] 
+                    # print(f"    DEBUG_S_C_YB_FALLBACK (ID: {std.get('id')}): year_digits='{year_digits}', potential_year_str='{potential_year_str}'")
+                    try:
+                        val = int(potential_year_str)
+                        if 1000 <= val <= datetime.now().year + 10:
+                            parsed_year_built = val
+                            # print(f"    DEBUG_S_C_YB_FALLBACK (ID: {std.get('id')}): Fallback parsed to int: {parsed_year_built}")
+                        # else:
+                            # print(f"    DEBUG_S_C_YB_FALLBACK (ID: {std.get('id')}): Fallback int {val} not plausible year (1000-{datetime.now().year + 10}).")
+                    except ValueError:
+                        pass # Silently ignore fallback int conversion error
+                # else:
+                    # print(f"    DEBUG_S_C_YB_FALLBACK (ID: {std.get('id')}): Not enough digits ('{year_digits}') in cleaned string '{year_built_cleaned}'")
+        elif isinstance(year_built_raw, (int, float)):
+            # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): IS INT/FLOAT = {year_built_raw}")
+            if year_built_raw > 1800:
+                parsed_year_built = int(year_built_raw)
+                # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): Parsed from int/float: {parsed_year_built}")
+            # else:
+                # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): Int/float value {year_built_raw} not > 1800.")
+        # else:
+            # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): NOT STRING OR INT/FLOAT. year_built_raw='{year_built_raw}' (type: {type(year_built_raw)}) leads to parsed_year_built={parsed_year_built}")
+    # else:
+        # print(f"WARN_STD_YBParsing (ID: {std.get('id')}): UNKNOWN data_type '{data_type}' for year_built parsing.")
+
+    std['year_built'] = parsed_year_built
+    # print(f"DEBUG_STD_YBParsing (ID: {std.get('id')}, Type: {data_type}): std_year_built set to = {std['year_built']}") # Covered by AgeCalc print
+
+    # --- Age Calculation ---
+    std['age'] = None # Initialize age to None
+    if data_type == 'comp':
+        age_raw_comp = prop_data.get('age')
+        if age_raw_comp and str(age_raw_comp).isdigit():
+            std['age'] = int(age_raw_comp)
+            if std['year_built'] is None and reference_year and std['age'] is not None:
+                 std['year_built'] = reference_year - std['age']
+        elif std['year_built'] and reference_year: # Age from parsed year if age_raw_comp not used
+            std['age'] = reference_year - std['year_built']
+        # else std['age'] remains None
+    elif data_type == 'property_listing':
+        # Check again if year_built_raw was likely an age
+        age_from_year_built_field = None
+        if isinstance(year_built_raw, (int, float)) and 0 <= year_built_raw < 150:
+            age_from_year_built_field = int(year_built_raw)
+
+        if age_from_year_built_field is not None:
+            std['age'] = age_from_year_built_field
+            if reference_year and std['age'] is not None:
+                # Overwrite std['year_built'] if it was (incorrectly) set from this "age" value
+                # or if it was None.
+                std['year_built'] = reference_year - std['age']
+            # else std['year_built'] might remain None if no ref_year
+        elif parsed_year_built and reference_year: # Age from a successfully parsed 4-digit year_built
+            std['age'] = reference_year - parsed_year_built
+        else: # Fallback: try to use 'age' field from prop_data if available and looks like an age
+            age_raw_listing = prop_data.get('age')
+            if age_raw_listing and str(age_raw_listing).isdigit() and 0 <= int(str(age_raw_listing)) < 150 :
+                std['age'] = int(str(age_raw_listing))
+                if reference_year and std['age'] is not None and std['year_built'] is None:
+                    std['year_built'] = reference_year - std['age'] # Infer year_built
+            else:
+                std['age'] = None # No valid age found
+    elif data_type == 'subject': # Explicitly handle subject
+        if std['year_built'] and reference_year:
+            std['age'] = reference_year - std['year_built']
+        # else std['age'] remains None
+    # Fallthrough for other cases (should ideally not happen if types are subject, comp, property_listing)
+    # but if std['age'] is still None, it remains so.
     
-    if data_type == 'subject':
-        age_raw = prop_data.get('effective_age', prop_data.get('subject_age'))
-        std['age'] = int(age_raw) if age_raw and str(age_raw).isdigit() else calculate_age(std['year_built'], reference_year)
-    elif data_type == 'comp':
-        age_raw = prop_data.get('age')
-        std['age'] = int(age_raw) if age_raw and str(age_raw).isdigit() else calculate_age(std['year_built'], reference_year)
-    else: # property_listing
-        std['age'] = calculate_age(std['year_built'], reference_year)
+    # print(f"DEBUG_STD_AgeCalc (ID: {std.get('id')}, Type: {data_type}): Final std_age = {std['age']}, Final std_year_built = {std['year_built']}")
 
     std['lot_size_sf'] = parse_sq_ft(prop_data.get('lot_size_sf', prop_data.get('lot_size')))
 
@@ -342,7 +457,13 @@ def find_similar_properties(subject_prop: Dict[str, Any],
     
     # Return the original dicts of the chosen candidates
     selected_indices = indices[0]
-    return [candidate_props_list[i] for i in selected_indices]
+    
+    recommended_results = []
+    for i in selected_indices:
+        original_prop = candidate_props_list[i] # Get the original dict
+        # print(f"DEBUG find_similar_properties loop: ID={original_prop.get('id')}, age={original_prop.get('age')}, year_built={original_prop.get('year_built')}")
+        recommended_results.append(original_prop)
+    return recommended_results
 
 
 # --- Main Execution Example ---
@@ -371,7 +492,7 @@ if __name__ == "__main__":
     DEMO_SUBJECT_LON = -76.5600 
 
     print(f"Processing Appraisal Order ID: {first_appraisal.get('orderID')}")
-    print(f"Assuming Subject Lat/Lon for demo: {DEMO_SUBJECT_LAT}, {DEMO_SUBJECT_LON}\\n")
+    print(f"Assuming Subject Lat/Lon for demo: {DEMO_SUBJECT_LAT}, {DEMO_SUBJECT_LON}\\\\n")
 
     processed_appraisal = process_appraisal_data(first_appraisal, DEMO_SUBJECT_LAT, DEMO_SUBJECT_LON)
 
@@ -383,6 +504,9 @@ if __name__ == "__main__":
         print("Could not process subject property. Exiting.")
         exit()
     
+    # print("\\nDEBUG: Full subject_property before summary:") # Removed, subject is now correct
+    # print(json.dumps(subject_property, indent=2))
+
     print("--- Standardized Subject Property (Key Features) ---")
     subject_summary = {k: subject_property.get(k) for k in ['id', 'address_full', 'gla', 'age', 'total_baths', 'structure_type', 'style', 'condition', 'latitude', 'longitude', 'distance_to_subject_km']}
     print(json.dumps(subject_summary, indent=2))
@@ -398,6 +522,15 @@ if __name__ == "__main__":
         print("No candidate properties to search from. Exiting.")
         exit()
 
+    # DEBUG: Print subject GLA and Lot Size before k-NN
+    if subject_property:
+        print(f"DEBUG Main: Subject GLA before k-NN: {subject_property.get('gla')}")
+        print(f"DEBUG Main: Subject Lot Size SF before k-NN: {subject_property.get('lot_size_sf')}")
+    if candidate_properties and len(candidate_properties) > 0:
+        print(f"DEBUG Main: First Candidate ({candidate_properties[0].get('id')}) GLA before k-NN: {candidate_properties[0].get('gla')}")
+        print(f"DEBUG Main: First Candidate ({candidate_properties[0].get('id')}) Lot Size SF before k-NN: {candidate_properties[0].get('lot_size_sf')}")
+
+
     print(f"--- Finding {N_COMPS_TO_FIND} Similar Properties from {len(candidate_properties)} Candidates ---")
     
     # Ensure candidate_properties have the necessary features, even if None (handled by imputer)
@@ -412,7 +545,7 @@ if __name__ == "__main__":
             subject_property[feature_key] = None
 
 
-    recommended_comps = find_similar_properties(
+    recommended_props_standardized = find_similar_properties(
         subject_prop=subject_property,
         candidate_props_list=candidate_properties,
         num_features=NUMERICAL_FEATURES,
@@ -420,21 +553,40 @@ if __name__ == "__main__":
         n_results=N_COMPS_TO_FIND
     )
 
-    print(f"--- Algorithm Recommended Comps ({len(recommended_comps)}) ---")
-    if recommended_comps:
-        for i, r_comp in enumerate(recommended_comps):
-            r_comp_summary = {k: r_comp.get(k) for k in ['id', 'address_full', 'gla', 'age', 'total_baths', 'structure_type', 'style', 'condition', 'sale_price', 'latitude', 'longitude', 'distance_to_subject_km']}
-            print(f"Recommended Comp {i+1}: {json.dumps(r_comp_summary, indent=2)}")
-    else:
-        print("No comps were recommended by the algorithm.")
-    print("\\n")
+    if not recommended_props_standardized:
+        print("No recommendations returned by find_similar_properties.")
+        exit()
+    
+    print(f"\\n--- Algorithm Recommended Comps ({N_COMPS_TO_FIND}) ---")
+    for i, prop_std in enumerate(recommended_props_standardized):
+        original_data_for_rec = prop_std.get('original_data', {}) # Get the original raw data
 
-    print("--- Comparison ---")
+        recommended_comp_display = {
+            "id": prop_std.get("id", "N/A"), # From standardized
+            "address_full": prop_std.get("address_full", "N/A"), # From standardized
+            "gla": prop_std.get("gla"), # From standardized
+            "age": prop_std.get("age"), # From standardized (corrected)
+            "year_built": prop_std.get("year_built"), # From standardized (derived/corrected)
+            "total_baths": prop_std.get("total_baths"), # From standardized
+            "structure_type": prop_std.get("structure_type"), # From standardized
+            "style": prop_std.get("style"), # From standardized
+            "condition": prop_std.get("condition"), # From standardized
+            
+            # Fields from original data that were not part of KNN features / not transformed for KNN
+            "sale_price": parse_price(original_data_for_rec.get("sale_price", original_data_for_rec.get("last_sold_price"))),
+            "latitude": original_data_for_rec.get("latitude"),
+            "longitude": original_data_for_rec.get("longitude"),
+            "distance_to_subject_km": prop_std.get("distance_to_subject_km") # Calculated during standardization
+        }
+        print(f"Recommended Comp {i + 1}:")
+        print(json.dumps(recommended_comp_display, indent=2))
+
+    # --- Comparison with Actual Comps ---
     actual_comp_ids = {comp.get('address_full') for comp in actual_comps if comp.get('address_full')} # Use address as ID if available
-    recommended_comp_ids = {comp.get('address_full') for comp in recommended_comps if comp.get('address_full')}
+    recommended_comp_ids = {comp.get('address_full') for comp in recommended_props_standardized if comp.get('address_full')}
     
     matches = actual_comp_ids.intersection(recommended_comp_ids)
-    print(f"Number of actual comps: {len(actual_comp_ids)}")
+    print(f"\\nNumber of actual comps: {len(actual_comp_ids)}")
     print(f"Number of recommended comps: {len(recommended_comp_ids)}")
     print(f"Number of matches (by address): {len(matches)}")
     if matches:
