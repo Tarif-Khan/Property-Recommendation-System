@@ -685,15 +685,12 @@ if __name__ == "__main__":
         addr = comp.get('address_full')
         comp_id = comp.get('id')
         if addr: actual_comp_keys.add(str(addr).strip().lower())
-        # Optionally, add ID if address is not robust enough or missing
-        # if comp_id: actual_comp_keys.add(f"id_{str(comp_id).strip().lower()}") 
 
     recommended_comp_keys = set()
     for prop_std in recommended_props_standardized:
         addr = prop_std.get('address_full')
         comp_id = prop_std.get('id')
         if addr: recommended_comp_keys.add(str(addr).strip().lower())
-        # if comp_id: recommended_comp_keys.add(f"id_{str(comp_id).strip().lower()}")
     
     matches = actual_comp_keys.intersection(recommended_comp_keys)
     print(f"\nNumber of actual comps uniquely identified: {len(actual_comp_keys)}")
