@@ -17,8 +17,8 @@ N_COMPS_TO_FIND = 3
 NUMERICAL_FEATURES = ['gla', 'age', 'lot_size_sf', 'bedrooms', 'total_baths', 'distance_to_subject_km', 'basement_sqft', 'room_count']
 CATEGORICAL_FEATURES = ['structure_type', 'style', 'condition', 'cooling_type', 'heating_type', 'primary_exterior_finish']
 
-# --- Helper Functions ---
 
+# Helper functions to process data from JSON
 def clean_string(text: Optional[str]) -> Optional[str]:
     return text.strip() if text else None
 
@@ -64,7 +64,8 @@ def parse_bath_count(bath_str: Optional[str]) -> Tuple[Optional[int], Optional[i
             full_baths = int(parts[0].strip()) if parts[0].strip() else 0
             half_baths = int(parts[1].strip()) if parts[1].strip() else 0
     except ValueError:
-        return None, None # Error in parsing
+        # We return none since it's an error in parsing
+        return None, None
     return full_baths, half_baths
 
 def calculate_age(year_built: Optional[Any], reference_year: Optional[int]) -> Optional[int]:
@@ -122,9 +123,9 @@ def standardize_property_features(prop_data: Dict[str, Any],
     if not prop_data:
         return None
 
-    # print(f"DEBUG_STD_ENTRY (ID: {prop_data.get('orderID', prop_data.get('id'))}, Type: {data_type}): Input prop_data['year_built'] = '{prop_data.get('year_built')}', reference_year = {reference_year}")
+  
 
-    std = {"data_type": data_type, "original_data": prop_data} # Keep original for reference
+    std = {"data_type": data_type, "original_data": prop_data} 
     
     std['id'] = str(prop_data.get('orderID', prop_data.get('id', prop_data.get('pin', clean_string(prop_data.get('address'))))))
     std['address_full'] = clean_string(prop_data.get('address'))
@@ -146,8 +147,7 @@ def standardize_property_features(prop_data: Dict[str, Any],
     year_built_raw = prop_data.get('year_built')
     parsed_year_built = None
 
-    # print(f"DEBUG_STD_YBParsing (ID: {std.get('id')}, Type: {data_type}): Raw year_built_raw = '{year_built_raw}'") # Moved into specific blocks
-
+   
     if data_type == 'property_listing':
         # ... (Property listing logic as it was in the last working version for property_listing)
         # This means the version that correctly set age=40, year_built=1985 for listing 76989
@@ -160,71 +160,50 @@ def standardize_property_features(prop_data: Dict[str, Any],
                 parsed_year_built = int(match_year.group(1))
         elif isinstance(year_built_raw, (int, float)) and year_built_raw > 1800:
              parsed_year_built = int(year_built_raw)
-        # print(f"DEBUG_STD_YBParsing (ID: {std.get('id')}, Type: {data_type}): PropertyListing: year_built_raw='{year_built_raw}', parsed_year_built={parsed_year_built}")
+       
 
     elif data_type == 'subject' or data_type == 'comp':
-        # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}, Type: {data_type}): ENTERING, year_built_raw='{year_built_raw}', type={type(year_built_raw)}")
         if isinstance(year_built_raw, str):
             year_built_cleaned = year_built_raw.strip()
-            # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): IS STRING. Cleaned to '{year_built_cleaned}'. Searching r'(\\d{{4}})' in it.")
             match_year = None
             try:
                 match_year = re.search(r"(\\d{4})", year_built_cleaned)
             except Exception:
-                pass # Silently ignore regex errors, fallback will be attempted
+                pass
             
             if match_year:
-                # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): REGEX MATCHED: '{match_year.group(0)}', group(1)='{match_year.group(1)}'")
                 try:
                     parsed_year_built = int(match_year.group(1))
-                    # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): Parsed to int: {parsed_year_built}")
                 except Exception:
-                    pass # Silently ignore int conversion errors
+                    pass
             else:
-                # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): REGEX NO MATCH for cleaned string '{year_built_cleaned}'. Attempting fallback digit extraction.")
                 year_digits = "".join(filter(str.isdigit, year_built_cleaned))
                 if len(year_digits) >= 4:
                     potential_year_str = year_digits[:4] 
-                    # print(f"    DEBUG_S_C_YB_FALLBACK (ID: {std.get('id')}): year_digits='{year_digits}', potential_year_str='{potential_year_str}'")
                     try:
                         val = int(potential_year_str)
                         if 1000 <= val <= datetime.now().year + 10:
                             parsed_year_built = val
-                            # print(f"    DEBUG_S_C_YB_FALLBACK (ID: {std.get('id')}): Fallback parsed to int: {parsed_year_built}")
-                        # else:
-                            # print(f"    DEBUG_S_C_YB_FALLBACK (ID: {std.get('id')}): Fallback int {val} not plausible year (1000-{datetime.now().year + 10}).")
                     except ValueError:
                         pass # Silently ignore fallback int conversion error
-                # else:
-                    # print(f"    DEBUG_S_C_YB_FALLBACK (ID: {std.get('id')}): Not enough digits ('{year_digits}') in cleaned string '{year_built_cleaned}'")
+
         elif isinstance(year_built_raw, (int, float)):
-            # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): IS INT/FLOAT = {year_built_raw}")
             if year_built_raw > 1800:
                 parsed_year_built = int(year_built_raw)
-                # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): Parsed from int/float: {parsed_year_built}")
-            # else:
-                # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): Int/float value {year_built_raw} not > 1800.")
-        # else:
-            # print(f"  DEBUG_S_C_YB (ID: {std.get('id')}): NOT STRING OR INT/FLOAT. year_built_raw='{year_built_raw}' (type: {type(year_built_raw)}) leads to parsed_year_built={parsed_year_built}")
-    # else:
-        # print(f"WARN_STD_YBParsing (ID: {std.get('id')}): UNKNOWN data_type '{data_type}' for year_built parsing.")
 
     std['year_built'] = parsed_year_built
-    # print(f"DEBUG_STD_YBParsing (ID: {std.get('id')}, Type: {data_type}): std_year_built set to = {std['year_built']}") # Covered by AgeCalc print
 
-    # --- Age Calculation ---
-    std['age'] = None # Initialize age to None
+    # Here's my logic to calculate age and year_built
+    std['age'] = None
     if data_type == 'comp':
         age_raw_comp = prop_data.get('age')
         if age_raw_comp and str(age_raw_comp).isdigit():
             std['age'] = int(age_raw_comp)
             if std['year_built'] is None and reference_year and std['age'] is not None:
                  std['year_built'] = reference_year - std['age']
-        elif std['year_built'] and reference_year: # Age from parsed year if age_raw_comp not used
+        elif std['year_built'] and reference_year:
             std['age'] = reference_year - std['year_built']
-        # else std['age'] remains None
     elif data_type == 'property_listing':
-        # Check again if year_built_raw was likely an age
         age_from_year_built_field = None
         if isinstance(year_built_raw, (int, float)) and 0 <= year_built_raw < 150:
             age_from_year_built_field = int(year_built_raw)
@@ -232,13 +211,10 @@ def standardize_property_features(prop_data: Dict[str, Any],
         if age_from_year_built_field is not None:
             std['age'] = age_from_year_built_field
             if reference_year and std['age'] is not None:
-                # Overwrite std['year_built'] if it was (incorrectly) set from this "age" value
-                # or if it was None.
                 std['year_built'] = reference_year - std['age']
-            # else std['year_built'] might remain None if no ref_year
-        elif parsed_year_built and reference_year: # Age from a successfully parsed 4-digit year_built
+        elif parsed_year_built and reference_year:
             std['age'] = reference_year - parsed_year_built
-        else: # Fallback: try to use 'age' field from prop_data if available and looks like an age
+        else:
             age_raw_listing = prop_data.get('age')
             if age_raw_listing and str(age_raw_listing).isdigit() and 0 <= int(str(age_raw_listing)) < 150 :
                 std['age'] = int(str(age_raw_listing))
@@ -249,12 +225,11 @@ def standardize_property_features(prop_data: Dict[str, Any],
     elif data_type == 'subject': # Explicitly handle subject
         if std['year_built'] and reference_year:
             std['age'] = reference_year - std['year_built']
-        # else std['age'] remains None
+    
+
     # Fallthrough for other cases (should ideally not happen if types are subject, comp, property_listing)
     # but if std['age'] is still None, it remains so.
     
-    # print(f"DEBUG_STD_AgeCalc (ID: {std.get('id')}, Type: {data_type}): Final std_age = {std['age']}, Final std_year_built = {std['year_built']}")
-
     std['lot_size_sf'] = parse_sq_ft(prop_data.get('lot_size_sf', prop_data.get('lot_size')))
 
     if data_type == 'subject':
@@ -273,15 +248,15 @@ def standardize_property_features(prop_data: Dict[str, Any],
     bath_source_str = prop_data.get('num_baths') if data_type == 'subject' else \
                       prop_data.get('bath_count') if data_type == 'comp' else None
     
-    if bath_source_str: # Subject or Comp with specific format
+    if bath_source_str:
         fb, hb = parse_bath_count(bath_source_str)
-    else: # Property listing or if specific format fails
+    else:
         fb = prop_data.get('full_baths')
         hb = prop_data.get('half_baths')
-        try: # Ensure they are integers if present
+        try:
             fb = int(fb) if fb is not None else None
             hb = int(hb) if hb is not None else None
-        except ValueError: # If conversion fails, set to None
+        except ValueError:
             fb, hb = None, None
             
     std['full_baths'], std['half_baths'] = fb, hb
@@ -574,7 +549,6 @@ def find_similar_properties(subject_prop: Dict[str, Any],
     recommended_results = []
     for i in selected_indices:
         original_prop = candidate_props_list[i] # Get the original dict
-        # print(f"DEBUG find_similar_properties loop: ID={original_prop.get('id')}, age={original_prop.get('age')}, year_built={original_prop.get('year_built')}")
         recommended_results.append(original_prop)
     return recommended_results
 
@@ -729,4 +703,3 @@ if __name__ == "__main__":
         print(f"Matching addresses: {matches}")
 
     print("\\nData processing and k-NN recommendation complete.")
-    print("Further improvements could involve: geocoding subject addresses, refining feature weights, using more advanced similarity metrics (like Gower distance for mixed types without one-hot encoding), or hyperparameter tuning.")
