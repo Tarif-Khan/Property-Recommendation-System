@@ -14,8 +14,8 @@ from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 
 
 N_COMPS_TO_FIND = 3
-NUMERICAL_FEATURES = ['gla', 'age', 'lot_size_sf', 'bedrooms', 'total_baths', 'distance_to_subject_km']
-CATEGORICAL_FEATURES = ['structure_type', 'style', 'condition']
+NUMERICAL_FEATURES = ['gla', 'age', 'lot_size_sf', 'bedrooms', 'total_baths', 'distance_to_subject_km', 'basement_sqft', 'room_count']
+CATEGORICAL_FEATURES = ['structure_type', 'style', 'condition', 'cooling_type', 'heating_type', 'primary_exterior_finish']
 
 # --- Helper Functions ---
 
@@ -292,11 +292,24 @@ def standardize_property_features(prop_data: Dict[str, Any],
     elif data_type == 'comp':
         raw_struct = prop_data.get('prop_type')
     else: # property_listing
-        raw_struct = prop_data.get('structure_type', prop_data.get('property_sub_type'))
+        raw_struct_type = prop_data.get('structure_type')
+        raw_prop_sub_type = prop_data.get('property_sub_type')
+        # DEBUG PRINT for property_listing structure_type sources
+        print(f"DEBUG_LISTING_STRUCT (ID: {std.get('id')}): raw structure_type='{raw_struct_type}', raw property_sub_type='{raw_prop_sub_type}'")
+        raw_struct = raw_struct_type if raw_struct_type else raw_prop_sub_type
     
-    std['structure_type'] = clean_string(raw_struct.split(',')[0] if raw_struct and ',' in raw_struct else raw_struct)
+    cleaned_raw_struct = clean_string(raw_struct.split(',')[0] if raw_struct and ',' in raw_struct else raw_struct)
+    
+    # Normalize structure types, especially for townhouses
+    if cleaned_raw_struct and 'townhouse' in cleaned_raw_struct.lower():
+        std['structure_type'] = 'Townhouse' # Normalize to generic Townhouse
+    else:
+        std['structure_type'] = cleaned_raw_struct
+    
+    # print(f"DEBUG_STRUCT_NORMALIZED (ID: {std.get('id')}, Type: {data_type}): Raw='{raw_struct}', CleanedRaw='{cleaned_raw_struct}', Final='{std['structure_type']}'")
 
-
+    # --- Style Standardization (Moved after Structure Type) ---
+    raw_style = None
     if data_type == 'subject':
         raw_style = prop_data.get('style')
     elif data_type == 'comp':
@@ -307,6 +320,57 @@ def standardize_property_features(prop_data: Dict[str, Any],
 
 
     std['condition'] = clean_string(prop_data.get('condition')) # Will be None for property_listings if not present
+
+    # New features - Basement SqFt (Numerical)
+    raw_basement_sqft = None
+    if data_type == 'subject':
+        raw_basement_sqft = prop_data.get('basement_area')
+    elif data_type == 'comp': # Comps in example don't have explicit bsmt area, but might have finished area
+        raw_basement_sqft = prop_data.get('basement_finish_area') 
+    else: # property_listing
+        raw_basement_sqft = prop_data.get('basement_sqft')
+    std['basement_sqft'] = parse_sq_ft(raw_basement_sqft)
+
+    # New features - Room Count (Numerical)
+    raw_room_count = None
+    if data_type == 'subject':
+        raw_room_count = prop_data.get('room_total') # 'room_count' also in subject, 'room_total' is parsed as int easier
+    elif data_type == 'comp':
+        raw_room_count = prop_data.get('total_rooms')
+    else: # property_listing
+        raw_room_count = prop_data.get('rooms_total', prop_data.get('total_rooms'))
+    std['room_count'] = int(str(raw_room_count).strip()) if raw_room_count and str(raw_room_count).strip().isdigit() else None
+
+    # New features - Cooling Type (Categorical)
+    raw_cooling = None
+    if data_type == 'subject':
+        raw_cooling = prop_data.get('cooling')
+    elif data_type == 'comp':
+        raw_cooling = prop_data.get('ac_type')
+    else: # property_listing
+        raw_cooling = prop_data.get('cooling_system', prop_data.get('cooling'))
+    std['cooling_type'] = clean_string(raw_cooling)
+
+    # New features - Heating Type (Categorical)
+    raw_heating = None
+    if data_type == 'subject':
+        raw_heating = prop_data.get('heating')
+    elif data_type == 'comp':
+        raw_heating = prop_data.get('heat_type')
+    else: # property_listing
+        raw_heating = prop_data.get('heating_system', prop_data.get('heating'))
+    std['heating_type'] = clean_string(raw_heating)
+
+    # New features - Primary Exterior Finish (Categorical)
+    raw_exterior = None
+    if data_type == 'subject':
+        raw_exterior = prop_data.get('exterior_finish')
+    elif data_type == 'comp':
+        raw_exterior = prop_data.get('exterior_walls')
+    else: # property_listing
+        raw_exterior = prop_data.get('exterior_finish', prop_data.get('construction_material'))
+    std['primary_exterior_finish'] = clean_string(raw_exterior.split(',')[0] if raw_exterior and ',' in raw_exterior else raw_exterior)
+
 
     if data_type == 'comp':
         std['sale_price'] = parse_price(prop_data.get('sale_price'))
@@ -392,6 +456,17 @@ def process_appraisal_data(appraisal_record: Dict[str, Any],
                 seen_ids_or_addresses.add(unique_key)
             processed_data['candidate_properties'].append(std_prop)
             
+    # --- Pre-filter candidates by subject's structure_type if available ---
+    subject_structure_type = std_subject.get('structure_type')
+    if subject_structure_type:
+        original_candidate_count = len(processed_data['candidate_properties'])
+        processed_data['candidate_properties'] = [prop for prop in processed_data['candidate_properties'] if prop.get('structure_type') == subject_structure_type]
+        print(f"Filtered candidates by subject structure type ('{subject_structure_type}'): {original_candidate_count} -> {len(processed_data['candidate_properties'])} candidates")
+
+    if not processed_data['candidate_properties']:
+        print("No candidate properties remaining after filtering. Exiting.")
+        return processed_data
+
     return processed_data
 
 # --- k-NN Similarity Finder ---
@@ -573,7 +648,7 @@ if __name__ == "__main__":
             "condition": prop_std.get("condition"), # From standardized
             
             # Fields from original data that were not part of KNN features / not transformed for KNN
-            "sale_price": parse_price(original_data_for_rec.get("sale_price", original_data_for_rec.get("last_sold_price"))),
+            "sale_price": prop_std.get("sale_price"), # Use the standardized sale_price
             "latitude": original_data_for_rec.get("latitude"),
             "longitude": original_data_for_rec.get("longitude"),
             "distance_to_subject_km": prop_std.get("distance_to_subject_km") # Calculated during standardization
@@ -582,12 +657,24 @@ if __name__ == "__main__":
         print(json.dumps(recommended_comp_display, indent=2))
 
     # --- Comparison with Actual Comps ---
-    actual_comp_ids = {comp.get('address_full') for comp in actual_comps if comp.get('address_full')} # Use address as ID if available
-    recommended_comp_ids = {comp.get('address_full') for comp in recommended_props_standardized if comp.get('address_full')}
+    actual_comp_keys = set()
+    for comp in actual_comps:
+        addr = comp.get('address_full')
+        comp_id = comp.get('id')
+        if addr: actual_comp_keys.add(str(addr).strip().lower())
+        # Optionally, add ID if address is not robust enough or missing
+        # if comp_id: actual_comp_keys.add(f"id_{str(comp_id).strip().lower()}") 
+
+    recommended_comp_keys = set()
+    for prop_std in recommended_props_standardized:
+        addr = prop_std.get('address_full')
+        comp_id = prop_std.get('id')
+        if addr: recommended_comp_keys.add(str(addr).strip().lower())
+        # if comp_id: recommended_comp_keys.add(f"id_{str(comp_id).strip().lower()}")
     
-    matches = actual_comp_ids.intersection(recommended_comp_ids)
-    print(f"\\nNumber of actual comps: {len(actual_comp_ids)}")
-    print(f"Number of recommended comps: {len(recommended_comp_ids)}")
+    matches = actual_comp_keys.intersection(recommended_comp_keys)
+    print(f"\nNumber of actual comps uniquely identified: {len(actual_comp_keys)}")
+    print(f"Number of recommended comps uniquely identified: {len(recommended_comp_keys)}")
     print(f"Number of matches (by address): {len(matches)}")
     if matches:
         print(f"Matching addresses: {matches}")
