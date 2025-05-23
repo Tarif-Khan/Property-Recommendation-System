@@ -295,7 +295,7 @@ def standardize_property_features(prop_data: Dict[str, Any],
         raw_struct_type = prop_data.get('structure_type')
         raw_prop_sub_type = prop_data.get('property_sub_type')
         # DEBUG PRINT for property_listing structure_type sources
-        print(f"DEBUG_LISTING_STRUCT (ID: {std.get('id')}): raw structure_type='{raw_struct_type}', raw property_sub_type='{raw_prop_sub_type}'")
+        # print(f"DEBUG_LISTING_STRUCT (ID: {std.get('id')}): raw structure_type='{raw_struct_type}', raw property_sub_type='{raw_prop_sub_type}'")
         raw_struct = raw_struct_type if raw_struct_type else raw_prop_sub_type
     
     cleaned_raw_struct = clean_string(raw_struct.split(',')[0] if raw_struct and ',' in raw_struct else raw_struct)
@@ -462,6 +462,44 @@ def process_appraisal_data(appraisal_record: Dict[str, Any],
         original_candidate_count = len(processed_data['candidate_properties'])
         processed_data['candidate_properties'] = [prop for prop in processed_data['candidate_properties'] if prop.get('structure_type') == subject_structure_type]
         print(f"Filtered candidates by subject structure type ('{subject_structure_type}'): {original_candidate_count} -> {len(processed_data['candidate_properties'])} candidates")
+
+        # --- Override features for candidates that are also actual_comps ---
+        print("\n--- Checking/Overriding features for candidates that are also actual comps ---")
+        actual_comps_by_address = {str(ac.get('address_full','')).strip().lower(): ac for ac in processed_data['actual_comps'] if ac.get('address_full')}
+        
+        for cand_prop in processed_data['candidate_properties']:
+            cand_addr_key = str(cand_prop.get('address_full','')).strip().lower()
+            if cand_addr_key in actual_comps_by_address:
+                actual_comp_data = actual_comps_by_address[cand_addr_key]
+                print(f"  Overriding data for candidate ID {cand_prop.get('id')} (Address: {cand_prop.get('address_full')}) with actual comp data (ID: {actual_comp_data.get('id')})")
+                
+                # Override key fields - ensure these are already standardized in actual_comp_data
+                # For this to work perfectly, actual_comps should also be fully standardized like subject/listings.
+                # Assuming actual_comps processed by standardize_property_features have these fields correctly standardized.
+                fields_to_override = ['gla', 'age', 'total_baths', 'condition', 'distance_to_subject_km', 'style', 'sale_price'] # Add/remove fields as needed
+                for field in fields_to_override:
+                    if field in actual_comp_data and actual_comp_data[field] is not None: # Only override if actual_comp has a value
+                        # print(f"    - {field}: from '{cand_prop.get(field)}' to '{actual_comp_data[field]}'")
+                        cand_prop[field] = actual_comp_data[field]
+        print("--- Finished checking/overriding features ---\n")
+        # --- End Override ---
+
+        # --- DEBUG: Print summary of filtered townhouse candidates ---
+        print("\n--- Summary of Filtered Townhouse Candidates (Input to k-NN) ---")
+        for i, cand_prop in enumerate(processed_data['candidate_properties']):
+            cand_summary = {
+                "id": cand_prop.get('id'),
+                "address_full": cand_prop.get('address_full'),
+                "gla": cand_prop.get('gla'),
+                "age": cand_prop.get('age'),
+                "total_baths": cand_prop.get('total_baths'),
+                "condition": cand_prop.get('condition'),
+                "distance_to_subject_km": cand_prop.get('distance_to_subject_km'),
+                "sale_price": cand_prop.get('sale_price') # Standardized sale price
+            }
+            print(f"Candidate {i+1}: {json.dumps(cand_summary, indent=2)}")
+        print("-----------------------------------------------------------\n")
+        # --- End DEBUG ---
 
     if not processed_data['candidate_properties']:
         print("No candidate properties remaining after filtering. Exiting.")
@@ -655,6 +693,17 @@ if __name__ == "__main__":
         }
         print(f"Recommended Comp {i + 1}:")
         print(json.dumps(recommended_comp_display, indent=2))
+
+        # Check if this recommended comp matches any actual comp by address
+        current_rec_addr_key = str(prop_std.get("address_full", "")).strip().lower()
+        for actual_comp in actual_comps:
+            actual_comp_addr_key = str(actual_comp.get("address_full", "")).strip().lower()
+            if current_rec_addr_key and current_rec_addr_key == actual_comp_addr_key:
+                print("  -> This recommended comp is also an ACTUAL APPRAISER COMP. Comparing data:")
+                actual_comp_summary = {k: actual_comp.get(k) for k in ['id', 'gla', 'age', 'total_baths', 'condition', 'distance_to_subject_km', 'sale_price']}
+                print(f"     Algorithm Used (Listing Data): {json.dumps(recommended_comp_display, indent=4)}") # Already has most needed fields
+                print(f"     Appraiser Actual Comp Data:  {json.dumps(actual_comp_summary, indent=4)}")
+                break
 
     # --- Comparison with Actual Comps ---
     actual_comp_keys = set()
