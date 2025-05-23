@@ -1,8 +1,0 @@
-[
-  {
-    "property_id": "sample1",
-    "location": {"latitude": 40.7128, "longitude": -74.0060},
-    "features": {"bedrooms": 3, "bathrooms": 2, "area": 1500, "year_built": 2010},
-    "price": 350000
-  }
-]
